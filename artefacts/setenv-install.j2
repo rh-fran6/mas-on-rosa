@@ -1,0 +1,19 @@
+export IBM_ENTITLEMENT_KEY="{{ mas_entitlement }}"
+export SLS_LICENSE_ID="{{ mas_sls_license_id }}"
+export SLS_LICENSE_FILE="{{ mas_license_path }}"
+export MAS_INSTANCE_ID="{{ mas_instance_id }}"
+export MAS_CONFIG_DIR="{{ mas_config_dir }}"
+export DRO_CONTACT_EMAIL="{{ mas_dro_email }}"
+export DRO_CONTACT_FIRSTNAME="{{ mas_dro_firstname }}"
+export DRO_CONTACT_LASTNAME="{{ mas_dro_lastname }}"
+export PROMETHEUS_ALERTMGR_STORAGE_CLASS="{{ efs_sc_name }}"
+export PROMETHEUS_STORAGE_CLASS="{{ mas_prometheus_alert_storageclass }}"
+export PROMETHEUS_USERWORKLOAD_STORAGE_CLASS="{{ mas_prometheus_alert_storageclass }}"
+export GRAFANA_INSTANCE_STORAGE_CLASS="{{ mas_prometheus_alert_storageclass }}"
+export MONGODB_STORAGE_CLASS="{{ mas_prometheus_alert_storageclass }}"
+export UDS_STORAGE_CLASS="{{ mas_prometheus_alert_storageclass }}"
+export OCP_INGRESS_TLS_SECRET_NAME="{{ ingress_secret[0].metadata.name }}"
+export MAS_CATALOG_VERSION="{{ catalog_version }}"
+
+
+

@@ -1,0 +1,196 @@
+---
+- name: Cleanup AWS and OpenShift configurations
+  hosts: localhost
+  gather_facts: no
+  vars:
+    aws_region: "us-east-1"
+    efs_sc_name: "efs-sc"
+    efs_file_system_name: "efs-token-1" 
+    cluster_name: "three-m-test-hcp"
+    cluster_exists: False
+  tasks:
+
+    - name: Get cluster username
+      when: cluster_exists
+      ansible.builtin.command: >
+        oc whoami
+      register: username
+
+    - name: Get cluster API Token
+      when: cluster_exists
+      ansible.builtin.command: >
+        oc whoami --show-token
+      register: api_key
+
+    - name: Get cluster API Server
+      when: cluster_exists
+      ansible.builtin.command: >
+        oc whoami --show-server
+      register: api_server
+
+    - name: Extract relevant values from secret and set as fact
+      ansible.builtin.set_fact:      
+        efs_policy_name: "{{ (cluster_name ~ '-rosa-efs-csi') }}"
+        efs_role_name: "{{ (cluster_name ~ '-aws-efs-csi-operator') }}"
+
+    - name: Remove MAS files - License and Env
+      ansible.builtin.file:
+        path: "artefacts/{{ item }}"
+        state: absent
+      with_items:
+        - setenv-install.sh
+        - license.dat
+    
+    - name: Delete existing Storage Class if it exists
+      when: cluster_exists
+      kubernetes.core.k8s:
+        state: absent
+        api_key: "{{ api_key.stdout }}"
+        username: "{{ username.stdout }}"
+        host: "{{ api_server.stdout }}"
+        validate_certs: false
+        api_version: storage.k8s.io/v1
+        kind: StorageClass
+        name: "{{ efs_sc_name }}"
+
+
+    - name: Delete EFS File System (Only If Not Exists)
+      community.aws.efs:
+        region: "{{ aws_region }}"
+        name: "{{ efs_file_system_name }}"
+        state: absent
+
+    - name: Check if Security Group exists
+      amazon.aws.ec2_security_group_info:
+        region: "{{ aws_region }}"
+        filters:
+          group_name: "{{ cluster_name }}-efs-sg"
+      register: existing_sg
+
+    - name: Delete Security Group rules if it exists
+      when: existing_sg.security_groups[0] is defined
+      amazon.aws.ec2_security_group:
+        region: "{{ aws_region }}"
+        group_id: "{{ existing_sg.security_groups[0].group_id }}"
+        state: absent
+
+    - name: Delete ClusterCSIDriver Object for EFS Operator
+      when: cluster_exists
+      kubernetes.core.k8s:
+        state: absent
+        api_key: "{{ api_key.stdout }}"
+        username: "{{ username.stdout }}"
+        host: "{{ api_server.stdout }}"
+        validate_certs: false
+        definition:
+          apiVersion: operator.openshift.io/v1
+          kind: ClusterCSIDriver
+          metadata:
+              name: efs.csi.aws.com
+          spec:
+            managementState: Managed
+
+    - name: Create Subscription for EFS Operator
+      when: cluster_exists
+      kubernetes.core.k8s:
+        state: absent
+        api_key: "{{ api_key.stdout }}"
+        username: "{{ username.stdout }}"
+        host: "{{ api_server.stdout }}"
+        validate_certs: false
+        definition:
+          apiVersion: operators.coreos.com/v1alpha1
+          kind: Subscription
+          metadata:
+            labels:
+              operators.coreos.com/aws-efs-csi-driver-operator.openshift-cluster-csi-drivers: ""
+            name: aws-efs-csi-driver-operator-subscription
+            namespace: openshift-operators
+          spec:
+            channel: stable
+            installPlanApproval: Automatic
+            name: aws-efs-csi-driver-operator
+            source: community-operators
+            sourceNamespace: openshift-marketplace
+
+    - name: Create Operator Group for EFS Operator
+      when: cluster_exists
+      kubernetes.core.k8s:
+        state: absent
+        api_key: "{{ api_key.stdout }}"
+        username: "{{ username.stdout }}"
+        host: "{{ api_server.stdout }}"
+        validate_certs: false
+        definition:
+          apiVersion: operators.coreos.com/v1
+          kind: OperatorGroup
+          metadata:
+            name: openshift-cluster-csi-drivers-operatorgroup
+            namespace: openshift-cluster-csi-drivers
+
+    - name: Create Secret for EFS Operator
+      when: cluster_exists
+      kubernetes.core.k8s:
+        state: absent
+        api_key: "{{ api_key.stdout }}"
+        username: "{{ username.stdout }}"
+        host: "{{ api_server.stdout }}"
+        validate_certs: false
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: aws-efs-cloud-credentials
+            namespace: openshift-cluster-csi-drivers
+
+    - name: Delete for EFS CSI Driver
+      amazon.aws.iam_role:
+        name: "{{ efs_role_name }}"
+        state: absent
+
+    - name: Delete EFS IAM Policy
+      amazon.aws.iam_managed_policy:
+        policy_name: "{{ efs_policy_name }}"
+        state: absent
+
+    - name: Create or Update EFS IAM Policy
+      amazon.aws.iam_managed_policy:
+        policy_name: "{{ efs_policy_name }}"
+        state: absent
+
+
+# apiVersion: operators.coreos.com/v1
+# kind: OperatorGroup
+# metadata:
+#   creationTimestamp: "2025-03-08T11:48:03Z"
+#   generateName: openshift-cluster-csi-drivers-
+#   generation: 1
+#   name: openshift-cluster-csi-drivers-72t4g
+#   namespace: openshift-cluster-csi-drivers
+#   resourceVersion: "55618"
+#   uid: 899f5d26-ace0-4671-af20-c1300b091403
+# spec:
+#   upgradeStrategy: Default
+
+# apiVersion: operators.coreos.com/v1alpha1
+# kind: Subscription
+# metadata:
+#   creationTimestamp: "2025-03-08T11:48:03Z"
+#   generation: 1
+#   labels:
+#     operators.coreos.com/aws-efs-csi-driver-operator.openshift-cluster-csi-drivers: ""
+#   name: aws-efs-csi-driver-operator
+#   namespace: openshift-cluster-csi-drivers
+#   resourceVersion: "56386"
+#   uid: 387e3610-91f7-483e-9365-bfb062744155
+# spec:
+#   channel: stable
+#   config:
+#     env:
+#     - name: ROLEARN
+#       value: arn:aws:iam::109454800699:role/three-m-test-hcp-aws-efs-csi-operator
+#   installPlanApproval: Automatic
+#   name: aws-efs-csi-driver-operator
+#   source: redhat-operators
+#   sourceNamespace: openshift-marketplace
+#   startingCSV: aws-efs-csi-driver-operator.v4.18.0-202502260933

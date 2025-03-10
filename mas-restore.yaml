@@ -1,0 +1,60 @@
+---
+- name: Uninstall MAS and its components
+  hosts: localhost
+  gather_facts: no
+  vars:
+    restore_mongodb: True
+    restore_db2: True
+    restore_core: True
+    restore_manage: True
+    restore_iot: True
+    restore_monitor: True
+    restore_health: True
+    restore_optimizer: True
+    restore_visualinspection: True
+
+  tasks:
+    - name: Restore MongoDB
+      when: restore_mongodb
+      ansible.builtin.include_role:
+        name: ibm.mas_devops.br_mongodb
+
+    - name: Restore DB2
+      when: restore_db2
+      ansible.builtin.include_role:
+        name: ibm.mas_devops.br_db2
+
+    - name: Restore MAS Core
+      when: restore_core
+      ansible.builtin.include_role:
+        name: ibm.mas_devops.br_core
+
+    - name: Restore Manage
+      when: restore_manage
+      ansible.builtin.include_role:
+        name: ibm.mas_devops.br_manage
+
+    - name: Restore IOT
+      when: restore_iot
+      ansible.builtin.include_role:
+        name: ibm.mas_devops.br_iot
+
+    - name: Restore Monitor
+      when: restore_monitor
+      ansible.builtin.include_role:
+        name: ibm.mas_devops.br_monitor
+
+    - name: Restore Health
+      when: restore_health
+      ansible.builtin.include_role:
+        name: ibm.mas_devops.br_health
+
+    - name: Restore Optimizer
+      when: restore_optimizer
+      ansible.builtin.include_role:
+        name: ibm.mas_devops.br_optimizer
+
+    - name: Restore Visual Inspection
+      when: restore_visualinspection
+      ansible.builtin.include_role:
+        name: ibm.mas_devops.br_visualinspection

@@ -1,0 +1,60 @@
+---
+- name: Uninstall MAS and its components
+  hosts: localhost
+  gather_facts: no
+  vars:
+    backup_mongodb: True
+    backup_db2: True
+    backup_core: True
+    backup_manage: True
+    backup_iot: True
+    backup_monitor: True
+    backup_health: True
+    backup_optimizer: True
+    backup_visualinspection: True
+
+  tasks:
+    - name: Backup MongoDB
+      when: backup_mongodb
+      ansible.builtin.include_role:
+        name: ibm.mas_devops.br_mongodb
+
+    - name: Backup DB2
+      when: backup_db2
+      ansible.builtin.include_role:
+        name: ibm.mas_devops.br_db2
+
+    - name: Backup MAS Core
+      when: backup_core
+      ansible.builtin.include_role:
+        name: ibm.mas_devops.br_core
+
+    - name: Backup Manage
+      when: backup_manage
+      ansible.builtin.include_role:
+        name: ibm.mas_devops.br_manage
+
+    - name: Backup IOT
+      when: backup_iot
+      ansible.builtin.include_role:
+        name: ibm.mas_devops.br_iot
+
+    - name: Backup Monitor
+      when: backup_monitor
+      ansible.builtin.include_role:
+        name: ibm.mas_devops.br_monitor
+
+    - name: Backup Health
+      when: backup_health
+      ansible.builtin.include_role:
+        name: ibm.mas_devops.br_health
+
+    - name: Backup Optimizer
+      when: backup_optimizer
+      ansible.builtin.include_role:
+        name: ibm.mas_devops.br_optimizer
+
+    - name: Backup Visual Inspection
+      when: backup_visualinspection
+      ansible.builtin.include_role:
+        name: ibm.mas_devops.br_visualinspection
