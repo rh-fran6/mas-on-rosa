@@ -30,7 +30,7 @@ This is tested on ROSA cluster versions 4.14 and 4.15.
 
 ```Python
 make virtualenv
-make mas-deployment-prep.yaml
+make install-mas-dependencies
 ```
 
 # Removing EFS and File Storage Class
