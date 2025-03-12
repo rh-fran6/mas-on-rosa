@@ -55,6 +55,7 @@ virtualenv:
 .PHONY: deploy-mas-full
 deploy-mas-full:
 	source $(VIRTUALENV)/bin/activate && \
+	export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES && \
 	ansible-playbook mas-deployment-prep.yaml && \
 	source artefacts/setenv-install.sh && \
 	ansible-playbook ibm.mas_devops.oneclick_core && \

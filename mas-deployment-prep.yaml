@@ -9,9 +9,9 @@
     efs_sc_name: "efs-sc"
     efs_file_system_name: "efs-token-1" 
     filesystem_id: "" 
-    mas_license_path: artefacts/license.dat
-    mas_instance_id: mas-instance-1
-    mas_workspace_id: mas-workspace-1
+    mas_license_path: $PWD/artefacts/license.dat
+    mas_instance_id: masinst1
+    mas_workspace_id: maswkspc1
     mas_workspace_name: mas-workspace-name
     mas_config_dir: $PWD/artefacts/mas_installation_dir
     mas_dro_email: myemail@mail.com

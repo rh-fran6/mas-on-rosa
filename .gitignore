@@ -7,3 +7,4 @@ artefacts/mas_installation_dir
 secret-backup/
 ansible.cfg
 log.log
+README-self.md
