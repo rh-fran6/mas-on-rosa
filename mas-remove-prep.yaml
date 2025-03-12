@@ -7,7 +7,8 @@
     efs_sc_name: "efs-sc"
     efs_file_system_name: "efs-token-1" 
     cluster_name: "three-m-test-hcp"
-    cluster_exists: False
+    mas_config_dir: $PWD/artefacts/mas_installation_dir
+    cluster_exists: true
   tasks:
 
     - name: Get cluster username
@@ -40,6 +41,11 @@
       with_items:
         - setenv-install.sh
         - license.dat
+    
+    - name: Delete a directory and its contents
+      ansible.builtin.file:
+        path: "{{ mas_config_dir }}" 
+        state: absent
     
     - name: Delete existing Storage Class if it exists
       when: cluster_exists
@@ -82,13 +88,9 @@
         username: "{{ username.stdout }}"
         host: "{{ api_server.stdout }}"
         validate_certs: false
-        definition:
-          apiVersion: operator.openshift.io/v1
-          kind: ClusterCSIDriver
-          metadata:
-              name: efs.csi.aws.com
-          spec:
-            managementState: Managed
+        api_version: operator.openshift.io/v1
+        kind: ClusterCSIDriver
+        name: efs.csi.aws.com
 
     - name: Create Subscription for EFS Operator
       when: cluster_exists
@@ -98,20 +100,10 @@
         username: "{{ username.stdout }}"
         host: "{{ api_server.stdout }}"
         validate_certs: false
-        definition:
-          apiVersion: operators.coreos.com/v1alpha1
-          kind: Subscription
-          metadata:
-            labels:
-              operators.coreos.com/aws-efs-csi-driver-operator.openshift-cluster-csi-drivers: ""
-            name: aws-efs-csi-driver-operator-subscription
-            namespace: openshift-operators
-          spec:
-            channel: stable
-            installPlanApproval: Automatic
-            name: aws-efs-csi-driver-operator
-            source: community-operators
-            sourceNamespace: openshift-marketplace
+        api_version: operators.coreos.com/v1alpha1
+        kind: Subscription
+        name: aws-efs-csi-driver-operator-subscription
+        namespace: openshift-operators
 
     - name: Create Operator Group for EFS Operator
       when: cluster_exists
@@ -121,12 +113,10 @@
         username: "{{ username.stdout }}"
         host: "{{ api_server.stdout }}"
         validate_certs: false
-        definition:
-          apiVersion: operators.coreos.com/v1
-          kind: OperatorGroup
-          metadata:
-            name: openshift-cluster-csi-drivers-operatorgroup
-            namespace: openshift-cluster-csi-drivers
+        api_version: operators.coreos.com/v1
+        kind: OperatorGroup
+        name: openshift-cluster-csi-drivers-operatorgroup
+        namespace: openshift-cluster-csi-drivers
 
     - name: Create Secret for EFS Operator
       when: cluster_exists
@@ -136,12 +126,10 @@
         username: "{{ username.stdout }}"
         host: "{{ api_server.stdout }}"
         validate_certs: false
-        definition:
-          apiVersion: v1
-          kind: Secret
-          metadata:
-            name: aws-efs-cloud-credentials
-            namespace: openshift-cluster-csi-drivers
+        api_version: v1
+        kind: Secret
+        name: aws-efs-cloud-credentials
+        namespace: openshift-cluster-csi-drivers
 
     - name: Delete for EFS CSI Driver
       amazon.aws.iam_role:

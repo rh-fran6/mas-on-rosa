@@ -3,6 +3,7 @@ artefacts/backup
 artefacts/backup-temp
 artefacts/license.dat
 artefacts/setenv-install.sh
+artefacts/mas_installation_dir
 secret-backup/
 ansible.cfg
 log.log

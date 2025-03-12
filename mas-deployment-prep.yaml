@@ -1,5 +1,5 @@
 ---
-- name: Create AWS Secret Manager and grant access
+- name: Prepare ROSA Environment for MAS Installation
   hosts: localhost
   gather_facts: no
   vars:
@@ -10,16 +10,19 @@
     efs_file_system_name: "efs-token-1" 
     filesystem_id: "" 
     mas_license_path: artefacts/license.dat
-    mas_instance_id: mas1
-    mas_config_dir: artefacts
+    mas_instance_id: mas-instance-1
+    mas_workspace_id: mas-workspace-1
+    mas_workspace_name: mas-workspace-name
+    mas_config_dir: $PWD/artefacts/mas_installation_dir
     mas_dro_email: myemail@mail.com
     mas_dro_firstname: FirstName
     mas_dro_lastname: LastName
-    mas_prometheus_alert_storageclass: gp2-csi
+    mas_prometheus_alert_storageclass: gp3-csi
     provision_efs: true
     catalog_version: v9-250306-amd64 # Default Value - "@@MAS_LATEST_CATALOG@@" - Installs latest catalog version, v9-250306-amd64|v9-250206-amd64|v9-250109-amd64
 
   tasks:  
+
     - name: Lookup IBM MAS Secrets from Secrets Manager
       ansible.builtin.set_fact:
         secret_value: "{{ lookup('amazon.aws.aws_secret', 'mas/secrets', bypath=true, region=aws_secret_region) }}"
@@ -184,7 +187,7 @@
           apiVersion: operators.coreos.com/v1
           kind: OperatorGroup
           metadata:
-            generateName: openshift-cluster-csi-drivers-
+            name: openshift-cluster-csi-drivers-operator
             namespace: openshift-cluster-csi-drivers
 
     - name: Create Subscription for EFS Operator
@@ -283,6 +286,10 @@
       when: worker_nodes.resources is defined and worker_nodes.resources | length > 0 and (provision_efs | default(false) | bool)
       ansible.builtin.set_fact:
         worker_node: "{{ worker_nodes.resources[0].metadata.name }}"
+    
+    - name: Debug Worker Nodes
+      debug:
+        msg: "Worker Node: {{ worker_node }}"
 
     - name: Get VPC ID of the Worker Node
       when: provision_efs
@@ -296,7 +303,7 @@
       ansible.builtin.set_fact:
         vpc_id: "{{ ec2_instance_info.instances[0].vpc_id }}"
     
-    - name: Debug VPC ID (Optional)
+    - name: Debug VPC ID
       debug:
         msg: "VPC ID: {{ vpc_id }}"
 
@@ -307,45 +314,51 @@
         filters:
           vpc-id: "{{ vpc_id }}"
       register: vpc_info
-    
-    - name: Set VPC CIDR as a Fact
-      ansible.builtin.set_fact:
+
+    - name: Extract VPC CIDR block
+      set_fact:
         vpc_cidr: "{{ vpc_info.vpcs[0].cidr_block }}"
     
-    - name: Debug VPC CIDR (Optional)
+    - name: Debug VPC CIDR
       debug:
-        msg: "VPC CIDR: {{ vpc_cidr }}"
+        msg: "VPC ID: {{ vpc_cidr }}"
 
-    - name: Get Security Group ID from Worker Node
-      amazon.aws.ec2_instance_info:
+    - name: Get private subnet in the VPC
+      amazon.aws.ec2_vpc_subnet_info:
         region: "{{ aws_region }}"
         filters:
-          private-dns-name: "{{ worker_node }}"
-      register: instance_info
+          vpc-id: "{{ vpc_id }}"
+          "tag:Name": "*-private*"
+      register: subnet_info
+
+    - name: Extract private subnets into a list
+      set_fact:
+        subnet_ids: "{{ subnet_info.subnets | selectattr('tags.Name', 'search', 'private') | map(attribute='subnet_id') | list }}"
     
+    - name: Debug VPC CIDR
+      debug:
+        msg: "Subnet IDs: {{ subnet_ids }}"
+
     - name: Extract Security Group ID
-      ansible.builtin.set_fact:
-        security_group_id: "{{ instance_info.instances[0].security_groups[0].group_id }}"
+      set_fact:
+        security_group_id: "{{ ec2_instance_info.instances[0].security_groups[0].group_id }}"
     
-    - name: Get Security Group Name from ID
+    - name: Debug Security Group ID
+      debug:
+        msg: "Security Group ID: {{ security_group_id }}"
+
+    - name: Check if security group exists
       amazon.aws.ec2_security_group_info:
         region: "{{ aws_region }}"
         filters:
           group-id: "{{ security_group_id }}"
-      register: security_group_info
-
-    - name: Extract Security Group Name
-      ansible.builtin.set_fact:
-        security_group_name: "{{ security_group_info.security_groups[0].group_name }}"
-    
-    - name: Debug Security Group Name
-      ansible.builtin.debug:
-        msg: "Security Group Name: {{ security_group_name }}"
+      register: existing_sg
     
     - name: Update Security Group to Allow EFS
+      when: existing_sg.security_groups | length == 0
       amazon.aws.ec2_security_group:
         region: "{{ aws_region }}"
-        name: "{{ security_group_name }}"
+        name: "{{ cluster_name }}-security-group"
         description: "AWS EFS SG"
         group_id: "{{ security_group_id }}"
         vpc_id: "{{ vpc_id }}"
@@ -356,21 +369,12 @@
             cidr_ip: "{{ vpc_cidr }}"
             rule_desc: "Allow EFS access from VPC"
         state: present
-
-    - name: Get Subnets in the VPC
-      amazon.aws.ec2_vpc_subnet_info:
-        region: "{{ aws_region }}"
-        filters:
-          vpc-id: "{{ vpc_id }}"
-      register: subnet_info
-   
-    - name: Filter Subnets with 'private' in Name Tag
-      ansible.builtin.set_fact:
-        private_subnets: "{{ subnet_info.subnets | selectattr('tags.Name', 'search', 'private') | map(attribute='subnet_id') | list }}"
+      register: created_sg
     
-    - name: Debug Matching Private Subnet IDs
-      ansible.builtin.debug:
-        msg: "{{ private_subnets }}"
+    - name: Debug created security group
+      debug:
+        msg: "Security Group {{ cluster_name }}-security-group was created."
+      when: created_sg is changed
 
     - name: Check if EFS File System Exists
       community.aws.efs_info:
@@ -397,19 +401,6 @@
     - name: Debug EFS File System ID
       ansible.builtin.debug:
         msg: "EFS File System ID: {{ efs_id }}"
-
-    - name: Get Existing EFS Mount Targets
-      ansible.builtin.shell: >
-        aws efs describe-mount-targets --file-system-id {{ efs_id }} --region {{ aws_region }}
-      register: existing_mounts
-      changed_when: false
-    
-    - name: Extract Existing Mount Target Subnet IDs
-      ansible.builtin.set_fact:
-        existing_mount_subnets: "{{ existing_mounts.stdout | from_json | json_query('MountTargets[*].SubnetId') }}"
-
-    - debug:
-        msg: "{{ private_subnets}}"
     
     - name: Create EFS Mount Targets if they don't exist
       community.aws.efs:
@@ -419,11 +410,11 @@
         tags:
            Name: "{{ efs_file_system_name }}"
         targets:
-          - subnet_id: "{{ private_subnets[0] }}"
+          - subnet_id: "{{ subnet_ids[0] }}"
             security_groups: ["{{ security_group_id }}"]
-          - subnet_id: "{{ private_subnets[1] }}"
+          - subnet_id: "{{ subnet_ids[1] }}"
             security_groups: ["{{ security_group_id }}"]
-          - subnet_id: "{{ private_subnets[2] }}"
+          - subnet_id: "{{ subnet_ids[2] }}"
             security_groups: ["{{ security_group_id }}"]
       when: provision_efs
       register: mount_targets
@@ -451,6 +442,28 @@
         kind: StorageClass
         name: "{{ efs_sc_name }}"
 
+    - name: Patch Existing GP3 Storage Class
+      kubernetes.core.k8s:
+        state: patched
+        api_key: "{{ api_key.stdout }}"
+        username: "{{ username.stdout }}"
+        host: "{{ api_server.stdout }}"
+        validate_certs: false
+        definition:
+          kind: StorageClass
+          apiVersion: storage.k8s.io/v1
+          metadata:
+            name: gp3-csi
+            annotations:
+              storageclass.kubernetes.io/is-default-class: 'false'
+          provisioner: ebs.csi.aws.com
+          parameters:
+            encrypted: 'true'
+            type: gp3
+          reclaimPolicy: Delete
+          allowVolumeExpansion: true
+          volumeBindingMode: WaitForFirstConsumer
+
     - name: Create Storage Class backed by EFS
       kubernetes.core.k8s:
         state: present
@@ -463,6 +476,8 @@
           apiVersion: storage.k8s.io/v1
           metadata:
             name: "{{ efs_sc_name }}"
+            annotations:
+              storageclass.kubernetes.io/is-default-class: 'true'
           provisioner: efs.csi.aws.com
           parameters:
             provisioningMode: efs-ap
@@ -471,6 +486,12 @@
             gidRangeStart: "1000"
             gidRangeEnd: "2000"
             basePath: "/dynamic_provisioning"
+
+    - name: Create an empty directory
+      ansible.builtin.file:
+        path: "{{ mas_config_dir }}"  
+        state: directory
+        mode: '0755'
 
     - name: Generate MAS installation environmental variable from template
       ansible.builtin.template:

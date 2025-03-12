@@ -3,21 +3,9 @@ SHELL := /bin/bash
 # https://ibm-mas.github.io/ansible-devops/playbooks/oneclick-core/
 # Other actions - add components|update|upgrade|uninstall|backup|restore
 
-# Catalog Versions - https://ibm-mas.github.io/cli/catalogs/
-# v9-250306-amd64
-# v9-250206-amd64
-# v9-250109-amd64
-# v9-241205-amd64
-# v9-241107-amd64
-# v9-241003-amd64
-# v9-240827-amd64
-# v9-240730-amd64
-# v9-240625-amd64
-# v8-240528-amd64
-# v8-240430-amd64
-# v8-240405-amd64
-# v8-240326-amd64
 
+
+# export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
 
 # Default goal when no target is specified
 .DEFAULT_GOAL := help
@@ -36,6 +24,7 @@ help:
 	@echo "  make deploy-mas-full          - Deploy full MAS installation"
 	@echo "  make restore-mas              - Restore MAS and its components"
 	@echo "  make install-mas-dependencies - Install MAS Dependencies"
+	@echo "  make remove-mas-dependencies  - Remove MAS Dependencies"
 	@echo "  make uninstall-mas            - Uninstall MAS and its components"
 	@echo "  make backup-mas               - Backup MAS and its components"
 	@echo "  make restore-mas              - Restore MAS and its components"
@@ -75,7 +64,7 @@ deploy-mas-full:
 .PHONY: deploy-mas
 deploy-mas:
 	source $(VIRTUALENV)/bin/activate && \
-	source artefacts/setenv-install.sh && \
+	source $(PWD)/artefacts/setenv-install.sh && \
 	ansible-playbook ibm.mas_devops.oneclick_core && \
 	deactivate
 
@@ -83,6 +72,7 @@ deploy-mas:
 .PHONY: install-mas-dependencies
 install-mas-dependencies:
 	source $(VIRTUALENV)/bin/activate && \
+	export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES && \
 	ansible-playbook mas-deployment-prep.yaml && \
 	deactivate
 
@@ -97,7 +87,7 @@ remove-mas-dependencies:
 .PHONY: uninstall-mas
 uninstall-mas:
 	source $(VIRTUALENV)/bin/activate && \
-	source artefacts/mas-uninstall.sh && \
+	source $(PWD)/artefacts/mas-uninstall.sh && \
     ansible-playbook ibm.mas_devops.uninstall_core && \
 	deactivate
 
@@ -105,7 +95,7 @@ uninstall-mas:
 .PHONY: backup-mas
 backup-mas:
 	source $(VIRTUALENV)/bin/activate && \
-	source artefacts/mas-backup.sh && \
+	source $(PWD)/artefacts/mas-backup.sh && \
 	ansible-playbook mas-backup.yaml && \
 	deactivate
 
@@ -113,7 +103,7 @@ backup-mas:
 .PHONY: restore-mas
 restore-mas:
 	source $(VIRTUALENV)/bin/activate && \
-	source artefacts/mas-backup.sh && \
+	source $(PWD)/artefacts/mas-backup.sh && \
 	ansible-playbook mas-restore.yaml && \
 	deactivate
 
@@ -121,7 +111,7 @@ restore-mas:
 .PHONY: upgrade-mas
 upgrade-mas:
 	source $(VIRTUALENV)/bin/activate && \
-	source artefacts/mas-upgrade.sh && \
+	source $(PWD)/artefacts/mas-upgrade.sh && \
 	ansible-playbook ibm.mas_devops.oneclick_upgrade && \
 	deactivate
 
@@ -129,6 +119,6 @@ upgrade-mas:
 .PHONY: update-mas
 update-mas:
 	source $(VIRTUALENV)/bin/activate && \
-	source artefacts/mas-upgrade.sh && \
+	source $(PWD)/artefacts/mas-upgrade.sh && \
 	ansible-playbook ibm.mas_devops.oneclick_update && \
 	deactivate
